@@ -26,7 +26,7 @@ public class ByteCodeOptimizer {
         //the default bytecode produced by ASM
 //        ClassVisitor cv = new ClassVisitor(ASM9, cw) {
 //        };
-        ClassVisitor cv = new Optimizer2(cw);
+        ClassVisitor cv = new Optimizer3(cw);
         cr.accept(cv, 0);
         return cw.toByteArray();
     }

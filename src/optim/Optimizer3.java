@@ -6,8 +6,8 @@ import org.objectweb.asm.MethodVisitor;
 
 import static org.objectweb.asm.Opcodes.*;
 
-public class Optimizer2 extends ClassVisitor {
-    public Optimizer2(ClassVisitor cv){
+public class Optimizer3 extends ClassVisitor {
+    public Optimizer3(ClassVisitor cv){
         super(ASM9, cv);
     }
 
@@ -17,19 +17,19 @@ public class Optimizer2 extends ClassVisitor {
         MethodVisitor mv;
         mv = cv.visitMethod(access, name, desc, signature, exceptions);
         if(mv != null){
-            mv = new RemoveZeroAdd(mv);
+            mv = new RemoveZeroMul(mv);
         }
         return mv;
     }
 
-    private class RemoveZeroAdd extends MethodVisitor {
+    private class RemoveZeroMul extends MethodVisitor {
         protected final static int SEEN_NOTHING = 0;
         protected final static int SEEN_ICONST_0 = 1;
         protected final static int SEEN_ILOAD = 2;
         protected int state;
         protected int index;
 
-        public RemoveZeroAdd(MethodVisitor mv){
+        public RemoveZeroMul(MethodVisitor mv){
             super(ASM9, mv);
         }
 
@@ -38,10 +38,12 @@ public class Optimizer2 extends ClassVisitor {
             mv.visitFrame(type, numLocal, local, numStack, stack);
 
         }
+
         @Override
         public void visitInsn(int opcode){
-            if(state == SEEN_ILOAD && opcode == IADD){
-                mv.visitVarInsn(ILOAD, index);
+            //Final state if 0 and x loaded
+            if(state == SEEN_ILOAD && (opcode == IMUL || opcode == IDIV)){
+                mv.visitInsn(ICONST_0);
                 state = SEEN_NOTHING;
                 return;
             }
@@ -82,6 +84,7 @@ public class Optimizer2 extends ClassVisitor {
             visitInsn();
             mv.visitVarInsn(opcode, varIndex);
         }
+
         @Override
         public void visitTypeInsn(int opcode, String desc){
             visitInsn();
