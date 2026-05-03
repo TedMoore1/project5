@@ -6,8 +6,8 @@ import org.objectweb.asm.MethodVisitor;
 
 import static org.objectweb.asm.Opcodes.*;
 
-public class Optimizer4 extends ClassVisitor {
-    public Optimizer4(ClassVisitor cv){
+public class Optimizer5 extends ClassVisitor {
+    public Optimizer5(ClassVisitor cv){
         super(ASM9, cv);
     }
 
@@ -17,25 +17,17 @@ public class Optimizer4 extends ClassVisitor {
         MethodVisitor mv;
         mv = cv.visitMethod(access, name, desc, signature, exceptions);
         if(mv != null){
-            mv = new RemoveLoadField(mv);
+            mv = new RemoveTrue(mv);
         }
         return mv;
     }
 
-    private class RemoveLoadField extends MethodVisitor {
+    private class RemoveTrue extends MethodVisitor {
         protected final static int SEEN_NOTHING = 0;
-        protected final static int SEEN_ILOAD = 1;
-        protected final static int SEEN_ALOAD = 2;
-        protected final static int SEEN_GETFIELD = 3;
-        protected final static int SEEN_ALOAD_2 = 4;
-
+        protected final static int SEEN_ICONST_1 = 1;
         protected int state;
-        protected int index;
-        protected String owner;
-        protected String name;
-        protected String desc;
 
-        public RemoveLoadField(MethodVisitor mv){
+        public RemoveTrue(MethodVisitor mv){
             super(ASM9, mv);
         }
 
@@ -48,23 +40,17 @@ public class Optimizer4 extends ClassVisitor {
         @Override
         public void visitInsn(int opcode){
             visitInsn();
+            if(opcode == ICONST_1){
+                state = SEEN_ICONST_1;
+                return;
+            }
             mv.visitInsn(opcode);
         }
 
         protected void visitInsn(){
-            if(state == SEEN_ILOAD){
-               mv.visitVarInsn(ILOAD, index);
-            } else if (state == SEEN_ALOAD){
-                mv.visitVarInsn(ALOAD, index);
-            } else if (state == SEEN_GETFIELD){
-                mv.visitVarInsn(ALOAD, index);
-                mv.visitFieldInsn(GETFIELD, owner, name, desc);
-            } else if (state == SEEN_ALOAD_2){
-                mv.visitVarInsn(ALOAD, index);
-                mv.visitFieldInsn(GETFIELD, owner, name, desc);
-                mv.visitVarInsn(ALOAD, index);
+            if(state == SEEN_ICONST_1){
+                mv.visitInsn(ICONST_1);
             }
-
             state = SEEN_NOTHING;
         }
 
@@ -76,35 +62,9 @@ public class Optimizer4 extends ClassVisitor {
 
         @Override
         public void visitVarInsn(int opcode, int varIndex) {
-            if(state == SEEN_ILOAD && opcode == ILOAD && varIndex == index){
-                mv.visitVarInsn(ILOAD, index);
-                mv.visitInsn(DUP);
-                state = SEEN_NOTHING;
-                return;
-            }
-            if(state == SEEN_GETFIELD && opcode == ALOAD && varIndex == index){
-                state = SEEN_ALOAD_2;
-                return;
-            }
-
             visitInsn();
-
-            if(opcode == ILOAD){
-                state = SEEN_ILOAD;
-                index = varIndex;
-                return;
-            }
-            if(opcode == ALOAD){
-                state = SEEN_ALOAD;
-                index = varIndex;
-                return;
-            }
-
             mv.visitVarInsn(opcode, varIndex);
         }
-
-
-
         @Override
         public void visitTypeInsn(int opcode, String desc){
             visitInsn();
@@ -113,22 +73,6 @@ public class Optimizer4 extends ClassVisitor {
 
         @Override
         public void visitFieldInsn(int opc, String owner, String name, String desc){
-            if(state == SEEN_ALOAD && opc == GETFIELD){
-                state = SEEN_GETFIELD;
-                this.owner = owner;
-                this.name = name;
-                this.desc = desc;
-                return;
-            }
-            if(state == SEEN_ALOAD_2 && opc == GETFIELD && owner.equals(this.owner)
-                    && name.equals(this.name) && desc.equals(this.desc)){
-                mv.visitVarInsn(ALOAD, index);
-                mv.visitFieldInsn(GETFIELD, this.owner, this.name, this.desc);
-                mv.visitInsn(DUP);
-                state = SEEN_NOTHING;
-                return;
-            }
-
             visitInsn();
             mv.visitFieldInsn(opc, owner, name, desc);
         }
@@ -146,6 +90,13 @@ public class Optimizer4 extends ClassVisitor {
 
         @Override
         public void visitJumpInsn(int opcode, Label label){
+            if(state == SEEN_ICONST_1){
+                if(opcode == IF_ICMPEQ){
+                    mv.visitJumpInsn(IFNE, label);
+                    state = SEEN_NOTHING;
+                    return;
+                }
+            }
             visitInsn();
             mv.visitJumpInsn(opcode, label);
         }
